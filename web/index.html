@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UIAPduino WebHID I/O</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <p class="back">UIAPduino WebHID — 詳細はリポジトリの README を参照</p>
+    <h1>UIAPduino WebHID I/O</h1>
+    <p class="subtitle">WebHID · PID 0xD011 · LED 出力 + pin 9 入力</p>
+
+    <div id="browser-warn" class="warn" hidden>
+      このブラウザは WebHID 非対応です。Chrome または Edge で <code>http://localhost</code> から開いてください。
+    </div>
+
+    <section class="card">
+      <h2>接続</h2>
+      <div class="row">
+        <span id="status-dot" class="dot"></span>
+        <span id="status-text">未接続</span>
+      </div>
+      <div class="row actions">
+        <button id="btn-connect" type="button">UIAPduino に接続</button>
+        <button id="btn-disconnect" type="button" disabled>切断</button>
+      </div>
+      <p class="hint">ファームウェア <code>webhid</code> を書き込んだ状態で、VID=1209 / PID=D011 のデバイスを選びます。</p>
+    </section>
+
+    <section class="card">
+      <h2>LED 制御</h2>
+      <div class="led-display">
+        <div id="led-visual" class="led off" aria-hidden="true"></div>
+        <span id="led-label">OFF</span>
+      </div>
+      <div class="row actions">
+        <button id="btn-on" type="button" disabled>ON</button>
+        <button id="btn-off" type="button" disabled>OFF</button>
+        <button id="btn-toggle" type="button" disabled>トグル</button>
+      </div>
+      <div class="row blink-row">
+        <label for="blink-ms">点滅周期 (×100ms)</label>
+        <input id="blink-ms" type="number" min="1" max="50" value="5" disabled>
+        <button id="btn-blink" type="button" disabled>点滅開始</button>
+        <button id="btn-blink-stop" type="button" disabled>点滅停止</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>ボタン入力</h2>
+      <p class="hint">pin 9 (PC7) を GND にショート（ボタン押下）で検知します。</p>
+      <div class="btn-display">
+        <div id="btn-visual" class="btn-indicator open" aria-hidden="true"></div>
+        <div>
+          <span id="btn-label">開放</span>
+          <p id="btn-changed" class="btn-changed">—</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>ログ</h2>
+      <div id="log" class="log"></div>
+    </section>
+  </main>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

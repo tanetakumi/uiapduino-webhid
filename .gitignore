@@ -1,0 +1,32 @@
+# --- 依存（clone して取得） ---
+external/
+
+# --- ファームウェアビルド成果物 ---
+firmware/webhid/*.bin
+firmware/webhid/*.hex
+firmware/webhid/*.elf
+firmware/webhid/*.lst
+firmware/webhid/*.map
+firmware/webhid/*.o
+firmware/webhid/*.d
+firmware/webhid/*~
+
+# --- OS / エディタ ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*~
+.vscode/
+.idea/
+*.code-workspace
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# --- ログ・一時 ---
+*.log
+tmp/

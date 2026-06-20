@@ -117,7 +117,7 @@ int main(void) {
 	SystemInit();
 	funGpioInitC();
 	pinMode(LED_PIN, GPIO_Speed_10MHz | GPIO_CNF_OUT_PP);
-	pinMode(BTN_PIN, GPIO_Speed_2MHz | GPIO_CNF_IN_PUPD);
+	pinMode(BTN_PIN, GPIO_Speed_In | GPIO_CNF_IN_PUPD);
 	funDigitalWrite(BTN_PIN, 1);
 	btn_sample = !funDigitalRead(BTN_PIN);
 	btn_raw_stable = btn_sample;

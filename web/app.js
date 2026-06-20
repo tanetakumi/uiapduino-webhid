@@ -7,7 +7,9 @@
 export const VID = 0x1209;
 export const PID = 0xd011;
 export const FEATURE_SIZE = 32;
-export const PROTO_VER = 0x02;
+export const PROTO_VER = 0x03;
+export const BTN_MIN_VER = 0x02;
+export const OLED_MIN_VER = 0x03;
 
 export const CMD = {
   OFF: 0x00,
@@ -15,6 +17,8 @@ export const CMD = {
   TOGGLE: 0x02,
   BLINK: 0x03,
   BLINK_STOP: 0x04,
+  OLED_CLEAR: 0x10,
+  OLED_LINE: 0x11,
 };
 
 export const BTN_EVT = {
@@ -25,6 +29,10 @@ export const BTN_EVT = {
 let device = null;
 let lastLedState = -1;
 let lastBtnState = -1;
+let lastOledReady = null;
+let firmwareVersion = 0;
+let warnedOldButtonFirmware = false;
+let warnedOldOledFirmware = false;
 
 const MAX_LOG_LINES = 80;
 
@@ -37,6 +45,8 @@ const ledLabel = $('led-label');
 const btnVisual = $('btn-visual');
 const btnLabel = $('btn-label');
 const btnChanged = $('btn-changed');
+const oledStatusDot = $('oled-status-dot');
+const oledStatusText = $('oled-status-text');
 
 const btnConnect = $('btn-connect');
 const btnDisconnect = $('btn-disconnect');
@@ -46,12 +56,18 @@ const btnToggle = $('btn-toggle');
 const btnBlink = $('btn-blink');
 const btnBlinkStop = $('btn-blink-stop');
 const blinkMs = $('blink-ms');
+const btnOledClear = $('btn-oled-clear');
+const oledInputs = [0, 1, 2, 3].map((row) => $(`oled-line-${row}`));
+const btnOledSend = [...document.querySelectorAll('.btn-oled-send')];
 
 function addLog(kind, msg) {
   const t = new Date().toTimeString().slice(0, 8);
   const row = document.createElement('div');
+  const badge = document.createElement('span');
   row.className = 'log-entry';
-  row.innerHTML = `<span class="${kind}">[${kind.toUpperCase()}]</span> ${t} ${msg}`;
+  badge.className = kind;
+  badge.textContent = `[${kind.toUpperCase()}]`;
+  row.append(badge, ` ${t} ${msg}`);
   logEl.appendChild(row);
   while (logEl.children.length > MAX_LOG_LINES) {
     logEl.removeChild(logEl.firstChild);
@@ -72,21 +88,39 @@ function setBtnUi(pressed) {
   btnChanged.textContent = `最終変化: ${new Date().toLocaleTimeString()}`;
 }
 
+function setOledControls(enabled) {
+  for (const control of [...oledInputs, ...btnOledSend, btnOledClear]) {
+    control.disabled = !enabled;
+  }
+}
+
+function setOledUi(ready, text) {
+  oledStatusDot.classList.toggle('ready', ready);
+  oledStatusText.textContent = text;
+  setOledControls(Boolean(device) && ready);
+}
+
 function setControls(connected) {
   btnConnect.disabled = connected;
   btnDisconnect.disabled = !connected;
   for (const b of [btnOn, btnOff, btnToggle, btnBlink, btnBlinkStop, blinkMs]) {
     b.disabled = !connected;
   }
+  if (!connected) setOledControls(false);
 }
 
 function setConnected(dev) {
   device = dev;
   lastLedState = -1;
   lastBtnState = -1;
+  lastOledReady = null;
+  firmwareVersion = 0;
+  warnedOldButtonFirmware = false;
+  warnedOldOledFirmware = false;
   dot.classList.add('connected');
   statusText.textContent = `接続: ${dev.productName || 'UIAPduino'}`;
   setControls(true);
+  setOledUi(false, '状態確認中');
   addLog('sys', `接続 PID=${dev.productId?.toString(16)}`);
 }
 
@@ -94,11 +128,14 @@ function setDisconnected() {
   device = null;
   lastLedState = -1;
   lastBtnState = -1;
+  lastOledReady = null;
+  firmwareVersion = 0;
   dot.classList.remove('connected');
   statusText.textContent = '未接続';
   setControls(false);
   setLedUi(false);
   setBtnUi(false);
+  setOledUi(false, '未接続');
   btnChanged.textContent = '—';
   addLog('sys', '切断');
 }
@@ -117,6 +154,30 @@ async function sendCmd(cmd, arg1 = 0) {
   addLog('tx', `cmd=0x${cmd.toString(16).padStart(2, '0')} arg=${arg1} ${hex(data.slice(0, 4))}…`);
 }
 
+function sanitizeAscii(text) {
+  return [...text]
+    .slice(0, 16)
+    .map((c) => {
+      const code = c.charCodeAt(0);
+      return code >= 0x20 && code <= 0x7e ? c : ' ';
+    })
+    .join('');
+}
+
+async function sendOledLine(row) {
+  if (!device || firmwareVersion < OLED_MIN_VER || !lastOledReady) return;
+
+  const text = sanitizeAscii(oledInputs[row].value);
+  oledInputs[row].value = text;
+
+  const data = buildReport(CMD.OLED_LINE, row);
+  for (let i = 0; i < text.length; i++) {
+    data[2 + i] = text.charCodeAt(i);
+  }
+  await device.sendFeatureReport(0, data);
+  addLog('tx', `OLED line=${row} text="${text}"`);
+}
+
 function hex(arr) {
   return [...arr].map((b) => b.toString(16).padStart(2, '0')).join(' ');
 }
@@ -125,9 +186,15 @@ function onInputReport(e) {
   const { data } = e;
   const buf = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   const ver = buf[1] ?? 0;
+  firmwareVersion = ver;
 
-  if (ver < PROTO_VER) {
+  if (ver < BTN_MIN_VER && !warnedOldButtonFirmware) {
+    warnedOldButtonFirmware = true;
     addLog('sys', `警告: ファーム ver=0x${ver.toString(16)} — pin 9 入力には ver 0x02 以上が必要`);
+  }
+  if (ver < OLED_MIN_VER && !warnedOldOledFirmware) {
+    warnedOldOledFirmware = true;
+    addLog('sys', `警告: OLEDにはファーム ver 0x${OLED_MIN_VER.toString(16)} 以上が必要`);
   }
 
   const ledState = buf[0] & 1;
@@ -152,6 +219,20 @@ function onInputReport(e) {
     setBtnUi(btnState === 1);
     if (!events) {
       addLog('rx', `pin9 ${btnState ? '押下' : '開放'}`);
+    }
+  }
+
+  const oledReady = ver >= OLED_MIN_VER && (buf[4] & 1) === 1;
+  if (oledReady !== lastOledReady) {
+    lastOledReady = oledReady;
+    if (ver < OLED_MIN_VER) {
+      setOledUi(false, '非対応ファームウェア');
+    } else if (oledReady) {
+      setOledUi(true, '表示可能');
+      addLog('rx', 'OLED ready');
+    } else {
+      setOledUi(false, 'OLED未接続 / I2Cエラー');
+      addLog('rx', 'OLED unavailable');
     }
   }
 }
@@ -201,5 +282,11 @@ btnBlink.addEventListener('click', () => {
   sendCmd(CMD.BLINK, n);
 });
 btnBlinkStop.addEventListener('click', () => sendCmd(CMD.BLINK_STOP));
+for (const button of btnOledSend) {
+  button.addEventListener('click', () => {
+    sendOledLine(Number(button.dataset.row));
+  });
+}
+btnOledClear.addEventListener('click', () => sendCmd(CMD.OLED_CLEAR));
 
 addLog('sys', '準備完了 — localhost で開いてください');

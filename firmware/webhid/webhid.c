@@ -8,6 +8,7 @@
 #include <string.h>
 #include "rv003usb.h"
 #include "funconfig.h"
+#include "oled_text.h"
 
 #define HIGH         FUN_HIGH
 #define LOW          FUN_LOW
@@ -18,13 +19,15 @@
 
 #define LED_PIN PC0          // UIAPduino built-in LED (pin 2)
 #define FEATURE_LEN 32
-#define FW_VERSION 0x02
+#define FW_VERSION 0x03
 
 #define CMD_OFF        0x00
 #define CMD_ON         0x01
 #define CMD_TOGGLE     0x02
 #define CMD_BLINK      0x03
 #define CMD_BLINK_STOP 0x04
+#define CMD_OLED_CLEAR 0x10
+#define CMD_OLED_LINE  0x11
 
 #define BTN_EVT_PRESSED  0x01
 #define BTN_EVT_RELEASED 0x02
@@ -72,6 +75,19 @@ static void handle_command(void) {
 	case CMD_BLINK_STOP:
 		blink_active = 0;
 		break;
+	case CMD_OLED_CLEAR:
+		oled_text_clear();
+		status_pending = 1;
+		break;
+	case CMD_OLED_LINE:
+		if (feature_buf[1] < OLED_TEXT_ROWS) {
+			uint8_t text[OLED_TEXT_COLS];
+			memcpy(text, &feature_buf[2], sizeof(text));
+			oled_text_set_line_bytes(feature_buf[1], text,
+			                         sizeof(text));
+			status_pending = 1;
+		}
+		break;
 	default:
 		break;
 	}
@@ -107,7 +123,8 @@ static void send_status(struct usb_endpoint *e, uint32_t sendtok) {
 		FW_VERSION,
 		btn_state,
 		btn_events,
-		0, 0, 0, 0,
+		oled_text_is_ready(),
+		0, 0, 0,
 	};
 	btn_events = 0;
 	usb_send_data(report, sizeof(report), 0, sendtok);
@@ -125,6 +142,7 @@ int main(void) {
 	btn_debounce_ms = millis();
 	led_apply(0);
 	Delay_Ms(10);
+	oled_text_init();
 	usb_setup();
 
 	uint32_t last_status_ms = 0;

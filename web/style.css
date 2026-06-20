@@ -67,6 +67,7 @@ h1 { font-size: 1.35rem; margin-bottom: 4px; }
   flex-shrink: 0;
 }
 .dot.connected { background: var(--ok); }
+.dot.ready { background: var(--ok); }
 
 .hint { margin-top: 10px; font-size: 0.8rem; color: var(--muted); }
 
@@ -145,6 +146,36 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   padding: 6px 8px;
   border-radius: 4px;
 }
+
+.oled-lines {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.oled-line {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.oled-line label {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.oled-line input {
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 7px 9px;
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+}
+
+.oled-line input:disabled { opacity: 0.45; }
 
 .log {
   background: #0a0e14;

@@ -10,7 +10,7 @@
   <main>
     <p class="back">UIAPduino WebHID — 詳細はリポジトリの README を参照</p>
     <h1>UIAPduino WebHID I/O</h1>
-    <p class="subtitle">WebHID · PID 0xD011 · LED 出力 + pin 9 入力</p>
+    <p class="subtitle">WebHID · PID 0xD011 · LED 出力 + pin 9 入力 + OLED テキスト</p>
 
     <div id="browser-warn" class="warn" hidden>
       このブラウザは WebHID 非対応です。Chrome または Edge で <code>http://localhost</code> から開いてください。
@@ -58,6 +58,40 @@
           <p id="btn-changed" class="btn-changed">—</p>
         </div>
       </div>
+    </section>
+
+    <section class="card">
+      <h2>OLED テキスト</h2>
+      <div class="row">
+        <span id="oled-status-dot" class="dot"></span>
+        <span id="oled-status-text">未接続</span>
+      </div>
+      <div class="oled-lines">
+        <div class="oled-line">
+          <label for="oled-line-0">行 0</label>
+          <input id="oled-line-0" type="text" maxlength="16" spellcheck="false" disabled>
+          <button class="btn-oled-send" data-row="0" type="button" disabled>送信</button>
+        </div>
+        <div class="oled-line">
+          <label for="oled-line-1">行 1</label>
+          <input id="oled-line-1" type="text" maxlength="16" spellcheck="false" disabled>
+          <button class="btn-oled-send" data-row="1" type="button" disabled>送信</button>
+        </div>
+        <div class="oled-line">
+          <label for="oled-line-2">行 2</label>
+          <input id="oled-line-2" type="text" maxlength="16" spellcheck="false" disabled>
+          <button class="btn-oled-send" data-row="2" type="button" disabled>送信</button>
+        </div>
+        <div class="oled-line">
+          <label for="oled-line-3">行 3</label>
+          <input id="oled-line-3" type="text" maxlength="16" spellcheck="false" disabled>
+          <button class="btn-oled-send" data-row="3" type="button" disabled>送信</button>
+        </div>
+      </div>
+      <div class="row actions">
+        <button id="btn-oled-clear" type="button" disabled>全クリア</button>
+      </div>
+      <p class="hint">SSD1306 128×64の上半分に、印字可能なASCIIを1行16文字まで表示します。</p>
     </section>
 
     <section class="card">

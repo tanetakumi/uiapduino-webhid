@@ -19,7 +19,7 @@
 
 #define LED_PIN PC0          // UIAPduino built-in LED (pin 2)
 #define FEATURE_LEN 32
-#define FW_VERSION 0x03
+#define FW_VERSION 0x04
 
 #define CMD_OFF        0x00
 #define CMD_ON         0x01
@@ -28,6 +28,7 @@
 #define CMD_BLINK_STOP 0x04
 #define CMD_OLED_CLEAR 0x10
 #define CMD_OLED_LINE  0x11
+#define CMD_OLED_REINIT 0x12
 
 #define BTN_EVT_PRESSED  0x01
 #define BTN_EVT_RELEASED 0x02
@@ -87,6 +88,10 @@ static void handle_command(void) {
 			                         sizeof(text));
 			status_pending = 1;
 		}
+		break;
+	case CMD_OLED_REINIT:
+		oled_text_init();
+		status_pending = 1;
 		break;
 	default:
 		break;

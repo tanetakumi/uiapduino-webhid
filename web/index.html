@@ -69,29 +69,37 @@
       <div class="oled-lines">
         <div class="oled-line">
           <label for="oled-line-0">行 0</label>
-          <input id="oled-line-0" type="text" maxlength="16" spellcheck="false" disabled>
+          <input id="oled-line-0" type="text" maxlength="16" spellcheck="false">
           <button class="btn-oled-send" data-row="0" type="button" disabled>送信</button>
         </div>
         <div class="oled-line">
           <label for="oled-line-1">行 1</label>
-          <input id="oled-line-1" type="text" maxlength="16" spellcheck="false" disabled>
+          <input id="oled-line-1" type="text" maxlength="16" spellcheck="false">
           <button class="btn-oled-send" data-row="1" type="button" disabled>送信</button>
         </div>
         <div class="oled-line">
           <label for="oled-line-2">行 2</label>
-          <input id="oled-line-2" type="text" maxlength="16" spellcheck="false" disabled>
+          <input id="oled-line-2" type="text" maxlength="16" spellcheck="false">
           <button class="btn-oled-send" data-row="2" type="button" disabled>送信</button>
         </div>
         <div class="oled-line">
           <label for="oled-line-3">行 3</label>
-          <input id="oled-line-3" type="text" maxlength="16" spellcheck="false" disabled>
+          <input id="oled-line-3" type="text" maxlength="16" spellcheck="false">
           <button class="btn-oled-send" data-row="3" type="button" disabled>送信</button>
         </div>
       </div>
-      <div class="row actions">
-        <button id="btn-oled-clear" type="button" disabled>全クリア</button>
+      <div class="row oled-options">
+        <label class="checkbox-label">
+          <input id="oled-auto-resync" type="checkbox" checked>
+          再接続時に入力内容を自動で再送信
+        </label>
       </div>
-      <p class="hint">SSD1306 128×64の上半分に、印字可能なASCIIを1行16文字まで表示します。</p>
+      <div class="row actions">
+        <button id="btn-oled-resend-all" type="button" disabled>全行を再送信</button>
+        <button id="btn-oled-clear" type="button" disabled>全クリア</button>
+        <button id="btn-oled-reinit" type="button" disabled>OLEDを再検出</button>
+      </div>
+      <p class="hint">SSD1306 128×64の上半分に、印字可能なASCIIを1行16文字まで表示します。I2Cエラー時は「OLEDを再検出」を試してください（ファーム ver 0x04 以上）。</p>
     </section>
 
     <section class="card">

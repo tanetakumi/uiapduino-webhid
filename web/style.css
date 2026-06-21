@@ -68,6 +68,7 @@ h1 { font-size: 1.35rem; margin-bottom: 4px; }
 }
 .dot.connected { background: var(--ok); }
 .dot.ready { background: var(--ok); }
+.dot.unsynced { background: var(--warn-text); }
 
 .hint { margin-top: 10px; font-size: 0.8rem; color: var(--muted); }
 
@@ -176,6 +177,23 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 }
 
 .oled-line input:disabled { opacity: 0.45; }
+
+.oled-options {
+  margin-top: 12px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.checkbox-label input {
+  accent-color: var(--accent);
+}
 
 .log {
   background: #0a0e14;

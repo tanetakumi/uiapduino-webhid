@@ -7,9 +7,10 @@
 export const VID = 0x1209;
 export const PID = 0xd011;
 export const FEATURE_SIZE = 32;
-export const PROTO_VER = 0x03;
+export const PROTO_VER = 0x04;
 export const BTN_MIN_VER = 0x02;
 export const OLED_MIN_VER = 0x03;
+export const OLED_REINIT_MIN_VER = 0x04;
 
 export const CMD = {
   OFF: 0x00,
@@ -19,6 +20,7 @@ export const CMD = {
   BLINK_STOP: 0x04,
   OLED_CLEAR: 0x10,
   OLED_LINE: 0x11,
+  OLED_REINIT: 0x12,
 };
 
 export const BTN_EVT = {
@@ -26,13 +28,19 @@ export const BTN_EVT = {
   RELEASED: 0x02,
 };
 
+const STORAGE_LINES = 'uiapduino-oled-lines';
+const STORAGE_AUTO_RESYNC = 'uiapduino-oled-auto-resync';
+
 let device = null;
 let lastLedState = -1;
 let lastBtnState = -1;
 let lastOledReady = null;
 let firmwareVersion = 0;
+let oledSynced = true;
+let resyncInFlight = false;
 let warnedOldButtonFirmware = false;
 let warnedOldOledFirmware = false;
+let warnedOldReinitFirmware = false;
 
 const MAX_LOG_LINES = 80;
 
@@ -57,6 +65,9 @@ const btnBlink = $('btn-blink');
 const btnBlinkStop = $('btn-blink-stop');
 const blinkMs = $('blink-ms');
 const btnOledClear = $('btn-oled-clear');
+const btnOledResendAll = $('btn-oled-resend-all');
+const btnOledReinit = $('btn-oled-reinit');
+const oledAutoResync = $('oled-auto-resync');
 const oledInputs = [0, 1, 2, 3].map((row) => $(`oled-line-${row}`));
 const btnOledSend = [...document.querySelectorAll('.btn-oled-send')];
 
@@ -88,16 +99,89 @@ function setBtnUi(pressed) {
   btnChanged.textContent = `最終変化: ${new Date().toLocaleTimeString()}`;
 }
 
-function setOledControls(enabled) {
-  for (const control of [...oledInputs, ...btnOledSend, btnOledClear]) {
-    control.disabled = !enabled;
+function saveOledDraft() {
+  try {
+    localStorage.setItem(STORAGE_LINES, JSON.stringify(oledInputs.map((el) => el.value)));
+  } catch {
+    /* ignore quota / private mode */
   }
 }
 
-function setOledUi(ready, text) {
-  oledStatusDot.classList.toggle('ready', ready);
-  oledStatusText.textContent = text;
-  setOledControls(Boolean(device) && ready);
+function loadOledDraft() {
+  try {
+    const raw = localStorage.getItem(STORAGE_LINES);
+    if (!raw) return;
+    const lines = JSON.parse(raw);
+    if (!Array.isArray(lines)) return;
+    for (let row = 0; row < oledInputs.length; row++) {
+      if (typeof lines[row] === 'string') {
+        oledInputs[row].value = lines[row].slice(0, 16);
+      }
+    }
+  } catch {
+    /* ignore corrupt storage */
+  }
+}
+
+function markOledUnsynced() {
+  if (!oledSynced) return;
+  oledSynced = false;
+  refreshOledStatusLabel();
+}
+
+function setOledSendControls(enabled) {
+  for (const button of btnOledSend) {
+    button.disabled = !enabled;
+  }
+  btnOledClear.disabled = !enabled;
+  btnOledResendAll.disabled = !enabled;
+}
+
+function setOledReinitControl(enabled) {
+  btnOledReinit.disabled = !enabled;
+}
+
+function refreshOledStatusLabel() {
+  oledStatusDot.classList.remove('ready', 'unsynced');
+
+  if (!device) {
+    oledStatusText.textContent = '未接続';
+    setOledSendControls(false);
+    setOledReinitControl(false);
+    return;
+  }
+
+  if (firmwareVersion > 0 && firmwareVersion < OLED_MIN_VER) {
+    oledStatusText.textContent = '非対応ファームウェア';
+    setOledSendControls(false);
+    setOledReinitControl(false);
+    return;
+  }
+
+  if (lastOledReady === null) {
+    oledStatusText.textContent = '状態確認中';
+    setOledSendControls(false);
+    setOledReinitControl(false);
+    return;
+  }
+
+  if (!lastOledReady) {
+    oledStatusText.textContent = 'OLED未接続 / I2Cエラー';
+    setOledSendControls(false);
+    const canReinit = firmwareVersion >= OLED_REINIT_MIN_VER;
+    setOledReinitControl(canReinit);
+    return;
+  }
+
+  oledStatusDot.classList.add('ready');
+  if (!oledSynced) {
+    oledStatusDot.classList.add('unsynced');
+    oledStatusText.textContent = '表示可能（未同期）';
+  } else {
+    oledStatusText.textContent = '表示可能';
+  }
+  setOledSendControls(true);
+  setOledReinitControl(false);
 }
 
 function setControls(connected) {
@@ -106,7 +190,7 @@ function setControls(connected) {
   for (const b of [btnOn, btnOff, btnToggle, btnBlink, btnBlinkStop, blinkMs]) {
     b.disabled = !connected;
   }
-  if (!connected) setOledControls(false);
+  refreshOledStatusLabel();
 }
 
 function setConnected(dev) {
@@ -115,12 +199,13 @@ function setConnected(dev) {
   lastBtnState = -1;
   lastOledReady = null;
   firmwareVersion = 0;
+  oledSynced = false;
   warnedOldButtonFirmware = false;
   warnedOldOledFirmware = false;
+  warnedOldReinitFirmware = false;
   dot.classList.add('connected');
   statusText.textContent = `接続: ${dev.productName || 'UIAPduino'}`;
   setControls(true);
-  setOledUi(false, '状態確認中');
   addLog('sys', `接続 PID=${dev.productId?.toString(16)}`);
 }
 
@@ -135,7 +220,6 @@ function setDisconnected() {
   setControls(false);
   setLedUi(false);
   setBtnUi(false);
-  setOledUi(false, '未接続');
   btnChanged.textContent = '—';
   addLog('sys', '切断');
 }
@@ -165,10 +249,11 @@ function sanitizeAscii(text) {
 }
 
 async function sendOledLine(row) {
-  if (!device || firmwareVersion < OLED_MIN_VER || !lastOledReady) return;
+  if (!device || firmwareVersion < OLED_MIN_VER || !lastOledReady) return false;
 
   const text = sanitizeAscii(oledInputs[row].value);
   oledInputs[row].value = text;
+  saveOledDraft();
 
   const data = buildReport(CMD.OLED_LINE, row);
   for (let i = 0; i < text.length; i++) {
@@ -176,10 +261,68 @@ async function sendOledLine(row) {
   }
   await device.sendFeatureReport(0, data);
   addLog('tx', `OLED line=${row} text="${text}"`);
+  return true;
+}
+
+async function sendAllOledLines({ reason = '全行を再送信' } = {}) {
+  if (!device || firmwareVersion < OLED_MIN_VER || !lastOledReady || resyncInFlight) {
+    return false;
+  }
+
+  resyncInFlight = true;
+  try {
+    for (let row = 0; row < oledInputs.length; row++) {
+      const ok = await sendOledLine(row);
+      if (!ok) return false;
+    }
+    oledSynced = true;
+    refreshOledStatusLabel();
+    addLog('sys', `OLED ${reason}`);
+    return true;
+  } finally {
+    resyncInFlight = false;
+  }
+}
+
+async function requestOledReinit() {
+  if (!device || firmwareVersion < OLED_REINIT_MIN_VER) return;
+
+  lastOledReady = null;
+  refreshOledStatusLabel();
+  oledStatusText.textContent = '再検出中…';
+  setOledReinitControl(false);
+
+  await sendCmd(CMD.OLED_REINIT);
+  addLog('sys', 'OLED 再検出を要求');
 }
 
 function hex(arr) {
   return [...arr].map((b) => b.toString(16).padStart(2, '0')).join(' ');
+}
+
+async function onOledReadyChanged(oledReady, ver) {
+  if (ver < OLED_MIN_VER) {
+    refreshOledStatusLabel();
+    return;
+  }
+
+  if (oledReady) {
+    addLog('rx', 'OLED ready');
+    if (oledAutoResync.checked) {
+      await sendAllOledLines({ reason: '再接続時に自動再送信' });
+    } else {
+      oledSynced = false;
+      refreshOledStatusLabel();
+    }
+    return;
+  }
+
+  addLog('rx', 'OLED unavailable');
+  if (ver < OLED_REINIT_MIN_VER && !warnedOldReinitFirmware) {
+    warnedOldReinitFirmware = true;
+    addLog('sys', 'ヒント: OLED再検出にはファーム ver 0x04 以上が必要（再ビルド・書き込み）');
+  }
+  refreshOledStatusLabel();
 }
 
 function onInputReport(e) {
@@ -225,15 +368,7 @@ function onInputReport(e) {
   const oledReady = ver >= OLED_MIN_VER && (buf[4] & 1) === 1;
   if (oledReady !== lastOledReady) {
     lastOledReady = oledReady;
-    if (ver < OLED_MIN_VER) {
-      setOledUi(false, '非対応ファームウェア');
-    } else if (oledReady) {
-      setOledUi(true, '表示可能');
-      addLog('rx', 'OLED ready');
-    } else {
-      setOledUi(false, 'OLED未接続 / I2Cエラー');
-      addLog('rx', 'OLED unavailable');
-    }
+    void onOledReadyChanged(oledReady, ver);
   }
 }
 
@@ -272,6 +407,20 @@ if (!navigator.hid) {
   });
 }
 
+oledAutoResync.checked = localStorage.getItem(STORAGE_AUTO_RESYNC) !== 'false';
+oledAutoResync.addEventListener('change', () => {
+  localStorage.setItem(STORAGE_AUTO_RESYNC, oledAutoResync.checked ? 'true' : 'false');
+});
+
+for (const input of oledInputs) {
+  input.addEventListener('input', () => {
+    saveOledDraft();
+    markOledUnsynced();
+  });
+}
+
+loadOledDraft();
+
 btnConnect.addEventListener('click', () => connect());
 btnDisconnect.addEventListener('click', () => disconnect());
 btnOn.addEventListener('click', () => sendCmd(CMD.ON));
@@ -287,6 +436,16 @@ for (const button of btnOledSend) {
     sendOledLine(Number(button.dataset.row));
   });
 }
-btnOledClear.addEventListener('click', () => sendCmd(CMD.OLED_CLEAR));
+btnOledClear.addEventListener('click', async () => {
+  await sendCmd(CMD.OLED_CLEAR);
+  for (const input of oledInputs) {
+    input.value = '';
+  }
+  saveOledDraft();
+  oledSynced = true;
+  refreshOledStatusLabel();
+});
+btnOledResendAll.addEventListener('click', () => sendAllOledLines());
+btnOledReinit.addEventListener('click', () => requestOledReinit());
 
 addLog('sys', '準備完了 — localhost で開いてください');
